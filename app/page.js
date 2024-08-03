@@ -1,12 +1,9 @@
 'use client'
-import Image from "next/image"
 import { useState, useEffect } from "react"
-import { firestore } from '@/firebase'
-import { Box, Modal, Typography, Stack, TextField, Button, InputBase, Paper } from "@mui/material"
-import { collection, deleteDoc, doc, getDocs, getDoc, query, setDoc, where } from 'firebase/firestore'
-
-
-
+import { firestore, storage } from '@/firebase'
+import { Box, Modal, Typography, Stack, TextField, Button } from "@mui/material"
+import { collection, deleteDoc, doc, getDocs, getDoc, query, setDoc } from 'firebase/firestore'
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 
 const style = {
   position: 'absolute',
@@ -28,14 +25,18 @@ const searchBarStyle = {
   display: 'flex',
   alignItems: 'center',
   width: 400,
-  backgroundColor: '#1976d2', // Same color as the "Add New Item" button
-  color: 'white'
+  backgroundColor: '#1976d2',
+  color: 'white',
+  borderRadius: 2,
 }
 
 const inputStyle = {
   marginLeft: 1,
   flex: 1,
-  color: 'white'
+  color: 'white',
+  '& input': {
+    color: 'white',
+  },
 }
 
 export default function Home() {
@@ -43,6 +44,8 @@ export default function Home() {
   const [open, setOpen] = useState(false)
   const [itemName, setItemName] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
+  const [selectedFile, setSelectedFile] = useState(null)
+  const [imageUrl, setImageUrl] = useState('')
 
   const updateInventory = async () => {
     const snapshot = query(collection(firestore, 'inventory'))
@@ -56,34 +59,55 @@ export default function Home() {
     })
     setInventory(inventoryList)
   }
-
-  const addItem = async (item) => {
-    const docRef = doc(collection(firestore, 'inventory'), item)
+  
+  const addItem = async () => {
+    const docRef = doc(collection(firestore, 'inventory'), itemName)
     const docSnap = await getDoc(docRef)
 
-    if (docSnap.exists()) {
-      const { quantity } = docSnap.data()
-      await setDoc(docRef, { quantity: quantity + 1 })
+    if (docSnap.exists()){
+      const {quantity} = docSnap.data()
+      await setDoc(docRef, {quantity: quantity + 1, imageUrl})
     } else {
-      await setDoc(docRef, { quantity: 1 })
+      await setDoc(docRef, {quantity: 1, imageUrl})
     }
 
     await updateInventory()
+    setItemName('')
+    setImageUrl('')
+    setSelectedFile(null)
+    handleClose()
   }
 
   const removeItem = async (item) => {
     const docRef = doc(collection(firestore, 'inventory'), item)
     const docSnap = await getDoc(docRef)
 
-    if (docSnap.exists()) {
-      const { quantity } = docSnap.data()
-      if (quantity == 1) {
+    if (docSnap.exists()){
+      const {quantity} = docSnap.data()
+      if (quantity === 1){
         await deleteDoc(docRef)
       } else {
-        await setDoc(docRef, { quantity: quantity - 1 })
+        await setDoc(docRef, {quantity: quantity - 1})
       }
     }
     await updateInventory()
+  }
+
+  const handleSearch = (event) => {
+    setSearchQuery(event.target.value)
+  }
+
+  const handleFileChange = (event) => {
+    setSelectedFile(event.target.files[0])
+  }
+
+  const handleFileUpload = async () => {
+    if (selectedFile) {
+      const storageRef = ref(storage, `images/${selectedFile.name}`)
+      await uploadBytes(storageRef, selectedFile)
+      const url = await getDownloadURL(storageRef)
+      setImageUrl(url)
+    }
   }
 
   useEffect(() => {
@@ -93,10 +117,12 @@ export default function Home() {
   const handleOpen = () => setOpen(true)
   const handleClose = () => setOpen(false)
 
-  const filteredInventory = inventory.filter(item => item.name.toLowerCase().includes(searchQuery.toLowerCase()))
+  const filteredInventory = inventory.filter(item =>
+    item.name.toLowerCase().includes(searchQuery.toLowerCase())
+  )
 
   return (
-    <Box
+    <Box 
       width="100vw"
       height="100vh"
       display={'flex'}
@@ -105,17 +131,17 @@ export default function Home() {
       alignItems={'center'}
       gap={2}
     >
-      <Modal
-        open={open}
+      <Modal 
+        open={open} 
         onClose={handleClose}
         aria-labelledby="modal-modal-title"
         aria-describedby="modal-modal-description"
-      >
+      > 
         <Box sx={style}>
           <Typography id="modal-modal-title" variant="h6" component="h2">
             Add Item
           </Typography>
-          <Stack width="100%" direction={'row'} spacing={2}>
+          <Stack width="100%" direction={'column'} spacing={2}>
             <TextField
               id="outlined-basic"
               label="Item"
@@ -125,30 +151,52 @@ export default function Home() {
               onChange={(e) => setItemName(e.target.value)}
             />
             <Button
+              variant="contained"
+              component="label"
+            >
+              Upload Image
+              <input
+                type="file"
+                accept="image/*"
+                hidden
+                onChange={handleFileChange}
+              />
+            </Button>
+            {selectedFile && <Typography>Selected file: {selectedFile.name}</Typography>}
+            <Button
+              variant="contained"
+              onClick={handleFileUpload}
+              disabled={!selectedFile}
+            >
+              Upload Image
+            </Button>
+            {imageUrl && <img src={imageUrl} alt="Uploaded" width="100" height="100" />}
+            <Button
               variant="outlined"
-              onClick={() => {
-                addItem(itemName)
-                setItemName('')
-                handleClose()
-              }}
+              onClick={addItem}
+              disabled={!itemName || !imageUrl}
             >
               Add
             </Button>
           </Stack>
         </Box>
       </Modal>
+      
       <Button variant="contained" onClick={handleOpen}>
         Add New Item
       </Button>
-      <Paper component="form" sx={searchBarStyle}>
-        <InputBase
-          sx={inputStyle}
-          placeholder="Search Inventory"
-          inputProps={{ 'aria-label': 'search inventory' }}
+
+      <Box sx={searchBarStyle}>
+        <TextField
+          placeholder="Search items..."
+          variant="outlined"
+          fullWidth
           value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
+          onChange={handleSearch}
+          InputProps={{ style: inputStyle }}
         />
-      </Paper>
+      </Box>
+
       <Box border={'1px solid #333'}>
         <Box
           width="800px"
@@ -159,12 +207,13 @@ export default function Home() {
           alignItems={'center'}
         >
           <Typography variant={'h2'} color={'#333'} textAlign={'center'}>
-            Inventory Items
+            Inventory Items 
           </Typography>
         </Box>
+
         <Stack width="800px" height="300px" spacing={2} overflow={"auto"}>
-          {filteredInventory.map(({ name, quantity }) => (
-            <Box
+          {filteredInventory.map(({name, quantity, imageUrl}) => (
+            <Box 
               key={name}
               width="100%"
               minHeight="150px"
@@ -180,6 +229,7 @@ export default function Home() {
               <Typography variant={'h3'} color={'#333'} textAlign={'center'}>
                 Quantity: {quantity}
               </Typography>
+              {imageUrl && <img src={imageUrl} alt={name} width="100" height="100" />}
               <Button variant="contained" onClick={() => removeItem(name)}>
                 Remove
               </Button>
