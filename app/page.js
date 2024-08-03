@@ -2,8 +2,11 @@
 import Image from "next/image"
 import { useState, useEffect } from "react"
 import { firestore } from '@/firebase'
-import { Box, Modal, Typography, Stack, TextField, Button } from "@mui/material"
+import { Box, Modal, Typography, Stack, TextField, Button, InputBase, Paper } from "@mui/material"
 import { collection, deleteDoc, doc, getDocs, getDoc, query, setDoc, where } from 'firebase/firestore'
+
+
+
 
 const style = {
   position: 'absolute',
@@ -18,6 +21,21 @@ const style = {
   display: 'flex',
   flexDirection: 'column',
   gap: 3,
+}
+
+const searchBarStyle = {
+  padding: '2px 4px',
+  display: 'flex',
+  alignItems: 'center',
+  width: 400,
+  backgroundColor: '#1976d2', // Same color as the "Add New Item" button
+  color: 'white'
+}
+
+const inputStyle = {
+  marginLeft: 1,
+  flex: 1,
+  color: 'white'
 }
 
 export default function Home() {
@@ -122,15 +140,15 @@ export default function Home() {
       <Button variant="contained" onClick={handleOpen}>
         Add New Item
       </Button>
-      <TextField
-        id="search"
-        label="Search"
-        variant="outlined"
-        fullWidth
-        value={searchQuery}
-        onChange={(e) => setSearchQuery(e.target.value)}
-        sx={{ marginBottom: 2 }}
-      />
+      <Paper component="form" sx={searchBarStyle}>
+        <InputBase
+          sx={inputStyle}
+          placeholder="Search Inventory"
+          inputProps={{ 'aria-label': 'search inventory' }}
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+        />
+      </Paper>
       <Box border={'1px solid #333'}>
         <Box
           width="800px"
